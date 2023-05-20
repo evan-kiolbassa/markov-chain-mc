@@ -44,7 +44,7 @@ class MultivariateMCMC:
         self.proposal_covariance = proposal_covariance or [np.eye(len(initial_state))]*num_chains
         self.burn_in_steps = burn_in_steps
         self.total_steps = np.zeros(num_chains)
-        self.accepted_steps = np.zeros(num_chains)
+        self.accepted_rate = np.zeros(num_chains)
 
     def step(self, chain_index):
         """
@@ -73,7 +73,8 @@ class MultivariateMCMC:
         # Ensure the returned values are finite numbers
         if not np.isfinite(current_pdf) or not np.isfinite(proposal_pdf):
             raise ValueError("The target PDF function returned a non-numeric value.")
-
+        # Increment the total proposals
+        self.total_steps[chain_index] += 1
         log_accept_prob = proposal_pdf - current_pdf
 
         if np.log(np.random.uniform()) < log_accept_prob:
@@ -135,7 +136,7 @@ class MultivariateMCMC:
         '''
         A method that tracks the acceptance rate
         '''
-        return self.accepted_steps / self.total_steps
+        return self.acceptance_rate / self.total_steps
     
     def confidence_interval(self, samples, alpha=0.05):
         """
