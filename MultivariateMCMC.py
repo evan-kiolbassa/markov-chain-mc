@@ -43,9 +43,8 @@ class MultivariateMCMC:
         self.covariance_method = covariance_method or ["empirical"]*num_chains
         self.proposal_covariance = proposal_covariance or [np.eye(len(initial_state))]*num_chains
         self.burn_in_steps = burn_in_steps
-        self.acceptance_rate = np.zeros(num_chains)
-        self.choose_covariance_matrix()
-        self.in_burn_in = False
+        self.total_steps = np.zeros(num_chains)
+        self.accepted_steps = np.zeros(num_chains)
 
     def step(self, chain_index):
         """
@@ -68,7 +67,14 @@ class MultivariateMCMC:
         proposal = np.random.multivariate_normal(self.current_state[chain_index], self.proposal_covariance[chain_index])
 
         # Calculate the log acceptance probability for the proposal
-        log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state[chain_index])
+        current_pdf = self.target_pdf(self.current_state[chain_index])
+        proposal_pdf = self.target_pdf(proposal)
+        
+        # Ensure the returned values are finite numbers
+        if not np.isfinite(current_pdf) or not np.isfinite(proposal_pdf):
+            raise ValueError("The target PDF function returned a non-numeric value.")
+
+        log_accept_prob = proposal_pdf - current_pdf
 
         if np.log(np.random.uniform()) < log_accept_prob:
             self.current_state[chain_index] = proposal
@@ -82,17 +88,13 @@ class MultivariateMCMC:
         return self.current_state[chain_index]
 
 
+
     def burn_in(self):
-        """
-        Perform the burn-in period by running the MCMC sampler for a specified number
-        of steps without collecting any samples. This is done in parallel for all chains.
-        """
-        self.in_burn_in = True  # set in_burn_in to True
         for _ in range(self.burn_in_steps):
             for j in range(self.num_chains):
                 self.step(j)
-        self.acceptance_rate = np.zeros(self.num_chains)
-        self.in_burn_in = False  # set in_burn_in back to False
+        self.total_steps = np.zeros(self.num_chains)
+        self.accepted_steps = np.zeros(self.num_chains)
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
         """
@@ -112,11 +114,12 @@ class MultivariateMCMC:
         numpy.ndarray
             A numpy array containing the generated samples.
         """
+        if thinning_factor <= 0:
+            raise ValueError("thinning_factor must be greater than 0")
+
         if do_burn_in:
             self.burn_in()
-            self.choose_covariance_matrix()
 
-        # Ensure we generate enough samples, accounting for thinning
         total_samples = num_samples * thinning_factor
 
         samples = np.empty((self.num_chains, total_samples, len(self.current_state[0])))
@@ -124,14 +127,15 @@ class MultivariateMCMC:
             for i in range(total_samples):
                 samples[j, i] = self.step(j)
 
-        # Apply thinning by selecting only every thinning_factor-th sample
         thinned_samples = samples[:, ::thinning_factor]
 
-        # Calculate the acceptance rate excluding the burn-in steps
-        for j in range(self.num_chains):
-            self.acceptance_rate[j] /= total_samples
-
         return thinned_samples
+    
+    def acceptance_rate(self):
+        '''
+        A method that tracks the acceptance rate
+        '''
+        return self.accepted_steps / self.total_steps
     
     def confidence_interval(self, samples, alpha=0.05):
         """
@@ -198,6 +202,27 @@ class MultivariateMCMC:
         Reset the sampler's state and acceptance rate.
         """
         self.current_state = np.array([self.initial_state]*self.num_chains)
-        self.acceptance_rate = np.zeros(self.num_chains)
+        self.total_steps = np.zeros(self.num_chains)
+        self.accepted_steps = np.zeros(self.num_chains)
 
-    
+
+    def reparameterize(self, transform, inverse_transform):
+        """
+        Reparameterize the model using the specified transformation.
+
+        Parameters
+        ----------
+        transform : callable
+            The transformation to apply to the parameters. It should take an array-like object of
+            the same length as the current state and return an array-like object of the same length.
+        inverse_transform : callable
+            The inverse of the transformation. It should take an array-like object of
+            the same length as the current state and return an array-like object of the same length.
+        """
+
+        transformed_state = transform(self.current_state)
+        if transformed_state.shape != self.current_state.shape:
+            raise ValueError("The transform function must return an array of the same shape as its input")
+        self.current_state = transformed_state
+        old_target_pdf = self.target_pdf
+        self.target_pdf = lambda x: old_target_pdf(inverse_transform(x))
