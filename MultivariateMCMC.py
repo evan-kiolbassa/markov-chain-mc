@@ -33,41 +33,21 @@ class MultivariateMCMC:
 
         method = self.covariance_method[chain_index]
 
+        # Generate a proposal for the next state of the Markov chain
+        proposal = np.random.multivariate_normal(self.current_state[chain_index], self.proposal_covariance[chain_index])
+
+        # Calculate the log acceptance probability for the proposal
+        log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state[chain_index])
+
         if method == "adaptive":
-            # Generate a proposal for the next state of the Markov chain
-            proposal = np.random.multivariate_normal(self.current_state[chain_index], self.proposal_covariance[chain_index])
-
-            # Calculate the log acceptance probability for the proposal
-            log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state[chain_index])
-
-            # Accept or reject the proposal based on the acceptance probability
+            # If the proposal is accepted, update the proposal covariance matrix using the accepted proposal
             if np.log(np.random.uniform()) < log_accept_prob:
-                self.current_state[chain_index] = proposal
-                self.acceptance_rate[chain_index] += 1.0
-
-                # If the proposal is accepted, update the proposal covariance matrix using the accepted proposal
                 diff = proposal - self.current_state[chain_index]
                 self.proposal_covariance[chain_index] += self.learning_rate * (np.outer(diff, diff) - self.proposal_covariance[chain_index])
-                
-        elif method == "manual":
-            # This is a naive implementation. Modify this as per your requirements.
-            proposal = np.random.multivariate_normal(self.current_state[chain_index], self.proposal_covariance[chain_index])
 
-            log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state[chain_index])
-            if np.log(np.random.uniform()) < log_accept_prob:
-                self.current_state[chain_index] = proposal
-                self.acceptance_rate[chain_index] += 1.0
-
-        elif method == "empirical":
-            self.proposal_covariance[chain_index] = self.compute_empirical_covariance(chain_index, 1000)
-            proposal = np.random.multivariate_normal(self.current_state[chain_index], self.proposal_covariance[chain_index])
-            log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state[chain_index])
-            if np.log(np.random.uniform()) < log_accept_prob:
-                self.current_state[chain_index] = proposal
-                self.acceptance_rate[chain_index] += 1.0
-
-        else:
-            raise ValueError(f"Invalid covariance method: {method}")
+        if np.log(np.random.uniform()) < log_accept_prob:
+            self.current_state[chain_index] = proposal
+            self.acceptance_rate[chain_index] += 1.0
 
         return self.current_state[chain_index]
 
@@ -185,3 +165,5 @@ class MultivariateMCMC:
         """
         self.current_state = np.array([self.initial_state]*self.num_chains)
         self.acceptance_rate = np.zeros(self.num_chains)
+
+    
