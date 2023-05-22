@@ -1,3 +1,7 @@
+import numpy as np
+import multiprocessing as mp
+
+
 class MultivariateMCMC:
     def __init__(
             self, target_pdf,
@@ -49,7 +53,25 @@ class MultivariateMCMC:
             self.total_steps = np.zeros(num_chains)
             self.accepted_steps = np.zeros(num_chains)
             self.choose_covariance_matrix()
-    
+    def parallel_chain_run(self, burn_in=False, num_samples=0, thinning_factor=1):
+        """
+        Helper function to run burn-in or sampling on a single chain in parallel.
+        """
+        try:
+            if burn_in:
+                for _ in range(self.burn_in_steps):
+                    self.step(0)
+            else:
+                samples = np.empty((num_samples, len(self.current_state[0])))
+                for i in range(num_samples):
+                    for _ in range(thinning_factor):
+                        self.step(0)
+                    samples[i] = self.current_state[0]
+                return samples
+        except Exception as e:
+            print(f"Error in chain run: {e}")
+            return None
+        
     def is_valid_state(self, state, lower_bound=-10, upper_bound=10):
         """
         Check if a proposed state is valid.
@@ -125,31 +147,23 @@ class MultivariateMCMC:
         """
         Perform the burn-in period for all chains.
         """
-        for _ in range(self.burn_in_steps):
-            for j in range(self.num_chains):
-                old_state = self.current_state[j].copy()  # save the old state
-                self.step(j)
-                # If the empirical method is used and the step was accepted, update the proposal covariance
-                if self.covariance_method[j] == 'empirical' and not np.array_equal(self.current_state[j], old_state):
-                    self.proposal_covariance[j] = self.compute_empirical_covariance(j, _)
+        pool = mp.Pool(processes=self.num_chains)
+        results = []
+        for _ in range(self.num_chains):
+            results.append(pool.apply_async(self.parallel_chain_run, args=(True, )))
+        pool.close()
+        pool.join()
+
+        # Handle exceptions
+        for result in results:
+            try:
+                result.get()
+            except Exception as e:
+                print(f"Error during burn-in: {e}")
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
         """
         Generate a specified number of samples from the MCMC sampler, with thinning.
-
-        Parameters
-        ----------
-        num_samples : int
-            The number of samples to generate.
-        thinning_factor : int
-            The thinning factor to apply. Only every thinning_factor-th sample is kept.
-        do_burn_in : bool
-            Whether to perform burn-in or not.
-
-        Returns
-        -------
-        numpy.ndarray
-            A numpy array containing the generated samples.
         """
         if thinning_factor <= 0 or not isinstance(thinning_factor, int):
             raise ValueError("thinning_factor must be a positive integer")
@@ -157,18 +171,23 @@ class MultivariateMCMC:
         if do_burn_in:
             self.burn_in()
 
-        total_samples = num_samples * thinning_factor
+        pool = mp.Pool(processes=self.num_chains)
+        results = [pool.apply_async(self.parallel_chain_run, args=(False, num_samples, thinning_factor)) for _ in range(self.num_chains)]
+        pool.close()
+        pool.join()
 
-        samples = np.empty((self.num_chains, total_samples, len(self.current_state[0])))
+        samples = np.empty((self.num_chains, num_samples, len(self.current_state[0])))
         for j in range(self.num_chains):
-            for i in range(total_samples):
-                old_state = self.current_state[j].copy()  # save the old state
-                self.step(j)
-                samples[j, i] = self.current_state[j] if not np.array_equal(self.current_state[j], old_state) else old_state  # record the new state if the proposal was accepted, else record the old state
+            try:
+                result = results[j].get()
+                if result is not None:
+                    samples[j] = result
+                else:
+                    print(f"Skipping chain {j} due to error in computation.")
+            except Exception as e:
+                print(f"Error retrieving result for chain {j}: {e}")
 
-        thinned_samples = samples[:, ::thinning_factor]
-
-        return thinned_samples
+        return samples
     
     def acceptance_rate(self):
         '''
