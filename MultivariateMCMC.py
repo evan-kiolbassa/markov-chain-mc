@@ -44,7 +44,8 @@ class MultivariateMCMC:
         self.proposal_covariance = proposal_covariance or [np.eye(len(initial_state))]*num_chains
         self.burn_in_steps = burn_in_steps
         self.total_steps = np.zeros(num_chains)
-        self.accepted_rate = np.zeros(num_chains)
+        self.accepted_steps = np.zeros(num_chains)
+        self.choose_covariance_matrix()
 
     def step(self, chain_index):
         """
@@ -60,7 +61,6 @@ class MultivariateMCMC:
         array-like
             The next state of the Markov chain for the specified chain.
         """
-
         method = self.covariance_method[chain_index]
 
         # Generate a proposal for the next state of the Markov chain
@@ -69,17 +69,18 @@ class MultivariateMCMC:
         # Calculate the log acceptance probability for the proposal
         current_pdf = self.target_pdf(self.current_state[chain_index])
         proposal_pdf = self.target_pdf(proposal)
-        
+
         # Ensure the returned values are finite numbers
         if not np.isfinite(current_pdf) or not np.isfinite(proposal_pdf):
             raise ValueError("The target PDF function returned a non-numeric value.")
+        
         # Increment the total proposals
         self.total_steps[chain_index] += 1
         log_accept_prob = proposal_pdf - current_pdf
 
         if np.log(np.random.uniform()) < log_accept_prob:
             self.current_state[chain_index] = proposal
-            self.acceptance_rate[chain_index] += 1.0
+            self.accepted_steps[chain_index] += 1.0
 
             if method == "adaptive":
                 # If the proposal is accepted, update the proposal covariance matrix using the accepted proposal
@@ -91,11 +92,12 @@ class MultivariateMCMC:
 
 
     def burn_in(self):
+        """
+        Perform the burn-in period for all chains.
+        """
         for _ in range(self.burn_in_steps):
             for j in range(self.num_chains):
                 self.step(j)
-        self.total_steps = np.zeros(self.num_chains)
-        self.accepted_rate = np.zeros(self.num_chains)
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
         """
@@ -115,8 +117,8 @@ class MultivariateMCMC:
         numpy.ndarray
             A numpy array containing the generated samples.
         """
-        if thinning_factor <= 0:
-            raise ValueError("thinning_factor must be greater than 0")
+        if thinning_factor <= 0 or not isinstance(thinning_factor, int):
+            raise ValueError("thinning_factor must be a positive integer")
 
         if do_burn_in:
             self.burn_in()
@@ -136,7 +138,7 @@ class MultivariateMCMC:
         '''
         A method that tracks the acceptance rate
         '''
-        return self.accepted_rate / self.total_steps
+        return self.accepted_steps / self.total_steps
     
     def confidence_interval(self, samples, alpha=0.05):
         """
@@ -172,7 +174,13 @@ class MultivariateMCMC:
         """
         Choose the proposal covariance matrix based on the specified covariance_method.
         """
+        if len(self.covariance_method) != self.num_chains:
+            raise ValueError("Length of covariance_method does not match number of chains.")
+        if len(self.proposal_covariance) != self.num_chains:
+            raise ValueError("Length of proposal_covariance does not match number of chains.")
         for i in range(self.num_chains):
+            if self.covariance_method[i] not in ["empirical", "adaptive", "manual"]:
+                raise ValueError(f"Invalid covariance_method for chain {i}. Valid options are 'empirical', 'adaptive', or 'manual'.")
             if self.covariance_method[i] == "empirical":
                 self.proposal_covariance[i] = self.compute_empirical_covariance(i, self.burn_in_steps)
             elif self.covariance_method[i] == "adaptive":
@@ -181,8 +189,6 @@ class MultivariateMCMC:
             elif self.covariance_method[i] == "manual":
                 if self.proposal_covariance[i] is None:
                     raise ValueError(f"The proposal_covariance parameter must be provided when using the manual covariance method for chain {i}.")
-            else:
-                raise ValueError(f"Invalid covariance_method for chain {i}. Valid options are 'empirical', 'adaptive', or 'manual'.")
         
     def compute_empirical_covariance(self, chain_index, num_samples):
         """
@@ -191,20 +197,22 @@ class MultivariateMCMC:
         samples = [self.step(chain_index) for _ in range(num_samples)]
         return np.cov(np.array(samples).T)
     
-    def report(self):
+    ef report(self):
+        """
+        Report the acceptance rate for each chain.
+        """
         for i in range(self.num_chains):
             if self.total_steps[i] != 0:
-                acceptance_rate = self.accepted_rate[i] / (self.total_steps[i] - self.burn_in_steps)
-                acceptance_rate = round(acceptance_rate, 4)
+                print(f"Chain {i} acceptance rate: {self.acceptance_rate()[i]}")
             else:
-                acceptance_rate = 0.0
-            print(f"Chain {i+1} acceptance rate: {acceptance_rate}")
+                print(f"Chain {i} has not yet started sampling.")
 
     def reset(self):
         """
-        Reset the sampler's state and acceptance rate.
+        Reset the sampler to its initial state.
         """
-        self.current_state = np.array([self.initial_state]*self.num_chains)
+        self.current_state = self.initial_state.copy()
+        self.proposal_covariance = self.initial_proposal_covariance.copy()
         self.total_steps = np.zeros(self.num_chains)
         self.accepted_steps = np.zeros(self.num_chains)
 
