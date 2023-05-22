@@ -8,47 +8,47 @@ class MultivariateMCMC:
             burn_in_steps=1000,
             learning_rate=0.01
             ):
-        """
-        Initialize the MultivariateMCMC object.
+            """
+            Initialize the MultivariateMCMC object.
 
-        Parameters
-        ----------
-        target_pdf : callable
-            The target probability density function to sample from. It should take an array-like object of
-            the same length as initial_state and return a scalar.
-        initial_state : array-like
-            The initial state of the Markov chains. All chains are initialized to this state.
-        num_chains : int, optional
-            The number of Markov chains to run in parallel. The default is 1.
-        covariance_method : list of str, optional
-            The method used to determine the proposal covariance matrix for each chain.
-            Possible values are "empirical", "adaptive", and "manual". If not provided, "empirical" is used for all chains.
-        proposal_covariance : list of array-like, optional
-            The initial proposal covariance matrices for each chain. Only used if covariance_method is "manual" or "adaptive".
-            If not provided, the identity matrix is used for all chains.
-        burn_in_steps : int, optional
-            The number of steps to run for the burn-in period. The default is 1000.
-        learning_rate : float, optional
-            The learning rate for updating the proposal covariance in the adaptive method. Only used if covariance_method is "adaptive". 
-            The default is 0.01.
+            Parameters
+            ----------
+            target_pdf : callable
+                The target probability density function to sample from. It should take an array-like object of
+                the same length as initial_state and return a scalar.
+            initial_state : array-like
+                The initial state of the Markov chains. All chains are initialized to this state.
+            num_chains : int, optional
+                The number of Markov chains to run in parallel. The default is 1.
+            covariance_method : list of str, optional
+                The method used to determine the proposal covariance matrix for each chain.
+                Possible values are "empirical", "adaptive", and "manual". If not provided, "empirical" is used for all chains.
+            proposal_covariance : list of array-like, optional
+                The initial proposal covariance matrices for each chain. Only used if covariance_method is "manual" or "adaptive".
+                If not provided, the identity matrix is used for all chains.
+            burn_in_steps : int, optional
+                The number of steps to run for the burn-in period. The default is 1000.
+            learning_rate : float, optional
+                The learning rate for updating the proposal covariance in the adaptive method. Only used if covariance_method is "adaptive". 
+                The default is 0.01.
 
-        Raises
-        ------
-        ValueError
-            If the covariance_method for any chain is not "empirical", "adaptive", or "manual".
-            If the covariance_method for any chain is "manual" but proposal_covariance is not provided for that chain.
-        """
-        self.target_pdf = target_pdf
-        self.current_state = np.array([initial_state]*num_chains)
-        self.initial_state = initial_state
-        self.learning_rate = learning_rate
-        self.num_chains = num_chains
-        self.covariance_method = covariance_method or ["empirical"]*num_chains
-        self.proposal_covariance = proposal_covariance or [np.eye(len(initial_state))]*num_chains
-        self.burn_in_steps = burn_in_steps
-        self.total_steps = np.zeros(num_chains)
-        self.accepted_steps = np.zeros(num_chains)
-        self.choose_covariance_matrix()
+            Raises
+            ------
+            ValueError
+                If the covariance_method for any chain is not "empirical", "adaptive", or "manual".
+                If the covariance_method for any chain is "manual" but proposal_covariance is not provided for that chain.
+            """
+            self.target_pdf = target_pdf
+            self.current_state = np.array([initial_state]*num_chains)
+            self.initial_state = initial_state
+            self.learning_rate = learning_rate
+            self.num_chains = num_chains
+            self.covariance_method = covariance_method or ["empirical"]*num_chains
+            self.proposal_covariance = proposal_covariance or [np.eye(len(initial_state))]*num_chains
+            self.burn_in_steps = burn_in_steps
+            self.total_steps = np.zeros(num_chains)
+            self.accepted_steps = np.zeros(num_chains)
+            self.choose_covariance_matrix()
 
     def step(self, chain_index):
         """
@@ -104,41 +104,41 @@ class MultivariateMCMC:
                 self.step(j)
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
-    """
-    Generate a specified number of samples from the MCMC sampler, with thinning.
+        """
+        Generate a specified number of samples from the MCMC sampler, with thinning.
 
-    Parameters
-    ----------
-    num_samples : int
-        The number of samples to generate.
-    thinning_factor : int
-        The thinning factor to apply. Only every thinning_factor-th sample is kept.
-    do_burn_in : bool
-        Whether to perform burn-in or not.
+        Parameters
+        ----------
+        num_samples : int
+            The number of samples to generate.
+        thinning_factor : int
+            The thinning factor to apply. Only every thinning_factor-th sample is kept.
+        do_burn_in : bool
+            Whether to perform burn-in or not.
 
-    Returns
-    -------
-    numpy.ndarray
-        A numpy array containing the generated samples.
-    """
-    if thinning_factor <= 0 or not isinstance(thinning_factor, int):
-        raise ValueError("thinning_factor must be a positive integer")
+        Returns
+        -------
+        numpy.ndarray
+            A numpy array containing the generated samples.
+        """
+        if thinning_factor <= 0 or not isinstance(thinning_factor, int):
+            raise ValueError("thinning_factor must be a positive integer")
 
-    if do_burn_in:
-        self.burn_in()
+        if do_burn_in:
+            self.burn_in()
 
-    total_samples = num_samples * thinning_factor
+        total_samples = num_samples * thinning_factor
 
-    samples = np.empty((self.num_chains, total_samples, len(self.current_state[0])))
-    for j in range(self.num_chains):
-        for i in range(total_samples):
-            old_state = self.current_state[j].copy()  # save the old state
-            self.step(j)
-            samples[j, i] = self.current_state[j] if not np.array_equal(self.current_state[j], old_state) else old_state  # record the new state if the proposal was accepted, else record the old state
+        samples = np.empty((self.num_chains, total_samples, len(self.current_state[0])))
+        for j in range(self.num_chains):
+            for i in range(total_samples):
+                old_state = self.current_state[j].copy()  # save the old state
+                self.step(j)
+                samples[j, i] = self.current_state[j] if not np.array_equal(self.current_state[j], old_state) else old_state  # record the new state if the proposal was accepted, else record the old state
 
-    thinned_samples = samples[:, ::thinning_factor]
+        thinned_samples = samples[:, ::thinning_factor]
 
-    return thinned_samples
+        return thinned_samples
     
     def acceptance_rate(self):
         '''
@@ -172,17 +172,23 @@ class MultivariateMCMC:
             intervals.append(np.percentile(samples[j], [lower_percentile, upper_percentile], axis=0).T)
         return intervals
 
-    def uncertainty(self, samples):
+    def uncertainty(self, samples, per_chain=False):
         """
         Compute the standard deviation of the posterior samples.
 
         samples: A list of numpy arrays containing the posterior samples for each chain.
+        per_chain: A boolean indicating whether to calculate uncertainty for each chain separately.
 
         Returns:
-            numpy array of shape (n_params,), containing the standard deviation
+            numpy array of shape (n_params,) containing the standard deviation
             of the posterior samples for each parameter.
         """
-        return np.std(np.concatenate(samples, axis=0), axis=0)
+        if per_chain:
+            # Return a list of standard deviations, one for each chain
+            return [np.std(chain_samples, axis=0) for chain_samples in samples]
+        else:
+            # Return a single standard deviation computed over all chains
+            return np.std(np.concatenate(samples, axis=0), axis=0)
     
     def choose_covariance_matrix(self):
         """
