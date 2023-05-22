@@ -95,7 +95,7 @@ class MultivariateMCMC:
             for j in range(self.num_chains):
                 self.step(j)
         self.total_steps = np.zeros(self.num_chains)
-        self.accepted_steps = np.zeros(self.num_chains)
+        self.accepted_rate = np.zeros(self.num_chains)
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
         """
@@ -136,7 +136,7 @@ class MultivariateMCMC:
         '''
         A method that tracks the acceptance rate
         '''
-        return self.acceptance_rate / self.total_steps
+        return self.accepted_rate / self.total_steps
     
     def confidence_interval(self, samples, alpha=0.05):
         """
@@ -192,11 +192,13 @@ class MultivariateMCMC:
         return np.cov(np.array(samples).T)
     
     def report(self):
-        """
-        Report the acceptance rate for each chain.
-        """
         for i in range(self.num_chains):
-            print(f"Chain {i+1} acceptance rate: {self.acceptance_rate[i] / (total_steps - self.burn_in_steps)}")
+            if self.total_steps[i] != 0:
+                acceptance_rate = self.accepted_rate[i] / (self.total_steps[i] - self.burn_in_steps)
+                acceptance_rate = round(acceptance_rate, 4)
+            else:
+                acceptance_rate = 0.0
+            print(f"Chain {i+1} acceptance rate: {acceptance_rate}")
 
     def reset(self):
         """
