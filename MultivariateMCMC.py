@@ -28,6 +28,9 @@ class MultivariateMCMC:
             If not provided, the identity matrix is used for all chains.
         burn_in_steps : int, optional
             The number of steps to run for the burn-in period. The default is 1000.
+        learning_rate : float, optional
+            The learning rate for updating the proposal covariance in the adaptive method. Only used if covariance_method is "adaptive". 
+            The default is 0.01.
 
         Raises
         ------
@@ -79,6 +82,7 @@ class MultivariateMCMC:
         log_accept_prob = proposal_pdf - current_pdf
 
         if np.log(np.random.uniform()) < log_accept_prob:
+            # If the proposal is accepted, update the current state
             self.current_state[chain_index] = proposal
             self.accepted_steps[chain_index] += 1.0
 
@@ -217,7 +221,7 @@ class MultivariateMCMC:
         self.accepted_steps = np.zeros(self.num_chains)
 
 
-    def reparameterize(self, transform, inverse_transform):
+    def reparameterize(self, transform, inverse_transform, jacobian):
         """
         Reparameterize the model using the specified transformation.
 
@@ -229,11 +233,19 @@ class MultivariateMCMC:
         inverse_transform : callable
             The inverse of the transformation. It should take an array-like object of
             the same length as the current state and return an array-like object of the same length.
+        jacobian: callable
+            The Jacobian of the transformation. It should take an array-like object of
+            the same length as the current state and return a matrix of shape (n, n), 
+            where n is the length of the state.
         """
 
         transformed_state = transform(self.current_state)
         if transformed_state.shape != self.current_state.shape:
             raise ValueError("The transform function must return an array of the same shape as its input")
         self.current_state = transformed_state
-        old_target_pdf = self.target_pdf
-        self.target_pdf = lambda x: old_target_pdf(inverse_transform(x))
+
+        def new_target_pdf(x):
+            y = inverse_transform(x)
+            return self.target_pdf(y) * np.abs(np.linalg.det(jacobian(y)))
+
+        self.target_pdf = new_target_pdf
