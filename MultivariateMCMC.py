@@ -101,7 +101,11 @@ class MultivariateMCMC:
         """
         for _ in range(self.burn_in_steps):
             for j in range(self.num_chains):
+                old_state = self.current_state[j].copy()  # save the old state
                 self.step(j)
+                # If the empirical method is used and the step was accepted, update the proposal covariance
+                if self.covariance_method[j] == 'empirical' and not np.array_equal(self.current_state[j], old_state):
+                    self.proposal_covariance[j] = self.compute_empirical_covariance(j, _)
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
         """
@@ -212,10 +216,9 @@ class MultivariateMCMC:
         
     def compute_empirical_covariance(self, chain_index, num_samples):
         """
-        Compute the empirical covariance matrix based on the specified number of samples.
+        Compute the empirical covariance matrix based on the past states.
         """
-        samples = [self.step(chain_index) for _ in range(num_samples)]
-        return np.cov(np.array(samples).T)
+        return np.cov(np.array(past_states).T)
     
     def report(self):
         """
