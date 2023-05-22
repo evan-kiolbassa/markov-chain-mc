@@ -197,7 +197,7 @@ class MultivariateMCMC:
         samples = [self.step(chain_index) for _ in range(num_samples)]
         return np.cov(np.array(samples).T)
     
-    ef report(self):
+    def report(self):
         """
         Report the acceptance rate for each chain.
         """
