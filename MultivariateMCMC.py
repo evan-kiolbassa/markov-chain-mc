@@ -150,12 +150,20 @@ class MultivariateMCMC:
         """
         Compute the credible intervals for the posterior samples for each chain.
 
-        samples: A list of numpy arrays containing the posterior samples for each chain.
-        alpha: The desired significance level for the credible intervals (default: 0.05).
+        Parameters
+        ----------
+        samples : list of numpy.ndarray
+            A list of numpy arrays, where each array contains the posterior samples for each chain.
+        alpha : float, optional
+            The desired significance level for the credible intervals (default: 0.05).
 
-        Returns:
+        Returns
+        -------
+        list of numpy.ndarray
             A list of numpy arrays, each of shape (n_params, 2), containing the lower and upper
-            bounds of the credible intervals for each parameter in each chain.
+            bounds of the credible intervals for each parameter in each chain. Each array in the list corresponds to
+            a chain, and each row in an array corresponds to a parameter, with the first column being the lower bound
+            and the second column being the upper bound of the credible interval for that parameter.
         """
         intervals = []
         for j in range(self.num_chains):
