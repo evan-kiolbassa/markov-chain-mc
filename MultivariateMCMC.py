@@ -104,39 +104,41 @@ class MultivariateMCMC:
                 self.step(j)
 
     def sample(self, num_samples, thinning_factor=1, do_burn_in=True):
-        """
-        Generate a specified number of samples from the MCMC sampler, with thinning.
+    """
+    Generate a specified number of samples from the MCMC sampler, with thinning.
 
-        Parameters
-        ----------
-        num_samples : int
-            The number of samples to generate.
-        thinning_factor : int
-            The thinning factor to apply. Only every thinning_factor-th sample is kept.
-        do_burn_in : bool
-            Whether to perform burn-in or not.
+    Parameters
+    ----------
+    num_samples : int
+        The number of samples to generate.
+    thinning_factor : int
+        The thinning factor to apply. Only every thinning_factor-th sample is kept.
+    do_burn_in : bool
+        Whether to perform burn-in or not.
 
-        Returns
-        -------
-        numpy.ndarray
-            A numpy array containing the generated samples.
-        """
-        if thinning_factor <= 0 or not isinstance(thinning_factor, int):
-            raise ValueError("thinning_factor must be a positive integer")
+    Returns
+    -------
+    numpy.ndarray
+        A numpy array containing the generated samples.
+    """
+    if thinning_factor <= 0 or not isinstance(thinning_factor, int):
+        raise ValueError("thinning_factor must be a positive integer")
 
-        if do_burn_in:
-            self.burn_in()
+    if do_burn_in:
+        self.burn_in()
 
-        total_samples = num_samples * thinning_factor
+    total_samples = num_samples * thinning_factor
 
-        samples = np.empty((self.num_chains, total_samples, len(self.current_state[0])))
-        for j in range(self.num_chains):
-            for i in range(total_samples):
-                samples[j, i] = self.step(j)
+    samples = np.empty((self.num_chains, total_samples, len(self.current_state[0])))
+    for j in range(self.num_chains):
+        for i in range(total_samples):
+            old_state = self.current_state[j].copy()  # save the old state
+            self.step(j)
+            samples[j, i] = self.current_state[j] if not np.array_equal(self.current_state[j], old_state) else old_state  # record the new state if the proposal was accepted, else record the old state
 
-        thinned_samples = samples[:, ::thinning_factor]
+    thinned_samples = samples[:, ::thinning_factor]
 
-        return thinned_samples
+    return thinned_samples
     
     def acceptance_rate(self):
         '''
