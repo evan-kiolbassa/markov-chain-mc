@@ -49,6 +49,28 @@ class MultivariateMCMC:
             self.total_steps = np.zeros(num_chains)
             self.accepted_steps = np.zeros(num_chains)
             self.choose_covariance_matrix()
+    
+    def is_valid_state(self, state, lower_bound=-10, upper_bound=10):
+        """
+        Check if a proposed state is valid.
+
+        This method should be overridden in subclasses to implement problem-specific constraints.
+
+        Parameters
+        ----------
+        state : array-like
+            The proposed state.
+        lower_bound : float, optional
+            The lower bound of the valid interval. The default is -10.
+        upper_bound : float, optional
+            The upper bound of the valid interval. The default is 10.
+
+        Returns
+        -------
+        bool
+            True if the state is valid, False otherwise.
+        """
+        return np.all((state >= lower_bound) & (state <= upper_bound))
 
     def step(self, chain_index):
         """
@@ -69,6 +91,10 @@ class MultivariateMCMC:
         # Generate a proposal for the next state of the Markov chain
         proposal = np.random.multivariate_normal(self.current_state[chain_index], self.proposal_covariance[chain_index])
 
+        if not self.is_valid_state(proposal):
+            # If the proposed state is not valid, return the current state without changing anything
+            return self.current_state[chain_index]
+
         # Calculate the log acceptance probability for the proposal
         current_pdf = self.target_pdf(self.current_state[chain_index])
         proposal_pdf = self.target_pdf(proposal)
@@ -76,7 +102,7 @@ class MultivariateMCMC:
         # Ensure the returned values are finite numbers
         if not np.isfinite(current_pdf) or not np.isfinite(proposal_pdf):
             raise ValueError("The target PDF function returned a non-numeric value.")
-        
+
         # Increment the total proposals
         self.total_steps[chain_index] += 1
         log_accept_prob = proposal_pdf - current_pdf
