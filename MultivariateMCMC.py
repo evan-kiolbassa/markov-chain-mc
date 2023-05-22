@@ -10,7 +10,8 @@ class MultivariateMCMC:
             covariance_method=None,
             proposal_covariance=None,
             burn_in_steps=1000,
-            learning_rate=0.01
+            learning_rate=0.01,
+            update_frequency=50
             ):
             """
             Initialize the MultivariateMCMC object.
@@ -42,6 +43,8 @@ class MultivariateMCMC:
                 If the covariance_method for any chain is not "empirical", "adaptive", or "manual".
                 If the covariance_method for any chain is "manual" but proposal_covariance is not provided for that chain.
             """
+            self.update_frequency = update_frequency
+            self.batch = [[] for _ in range(num_chains)]
             self.target_pdf = target_pdf
             self.current_state = np.array([initial_state]*num_chains)
             self.initial_state = initial_state
@@ -133,16 +136,21 @@ class MultivariateMCMC:
             # If the proposal is accepted, update the current state
             self.current_state[chain_index] = proposal
             self.accepted_steps[chain_index] += 1.0
+            self.batch[chain_index].append(proposal)
 
-            if method == "adaptive":
-                # If the proposal is accepted, update the proposal covariance matrix using the accepted proposal
-                diff = proposal - self.current_state[chain_index]
-                self.proposal_covariance[chain_index] += self.learning_rate * (np.outer(diff, diff) - self.proposal_covariance[chain_index])
+            if method == "adaptive" and len(self.batch[chain_index]) % self.update_frequency == 0:
+                self.update_covariance(chain_index)
+                self.batch[chain_index] = []  # clear the batch after updating
 
         return self.current_state[chain_index]
-
-
-
+    def update_covariance(self, chain_index):
+        """
+        Update the proposal covariance matrix based on the batch of accepted proposals.
+        """
+        accepted_proposals = np.array(self.batch[chain_index])
+        mean_proposal = np.mean(accepted_proposals, axis=0)
+        diff = accepted_proposals - mean_proposal
+        self.proposal_covariance[chain_index] += self.learning_rate * (np.outer(diff, diff) - self.proposal_covariance[chain_index])
     def burn_in(self):
         """
         Perform the burn-in period for all chains.
