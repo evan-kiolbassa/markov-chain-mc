@@ -275,13 +275,22 @@ class MultivariateMCMC:
     
     def report(self):
         """
-        Report the acceptance rate for each chain.
+        Report the acceptance rate for each chain, and compute Gelman-Rubin and Effective Sample Size diagnostics.
         """
         for i in range(self.num_chains):
             if self.total_steps[i] != 0:
                 print(f"Chain {i} acceptance rate: {self.acceptance_rate()[i]}")
             else:
                 print(f"Chain {i} has not yet started sampling.")
+
+        # Compute diagnostics
+        samples = np.array(self.chain)  # shape = (num_chains, num_samples, num_params)
+        R_hat = self.gelman_rubin(samples)
+        ess = self.effective_sample_size(samples)
+
+        for j in range(len(self.current_state[0])):
+            print(f"Parameter {j} Gelman-Rubin diagnostic: {R_hat[j]}")
+            print(f"Parameter {j} Effective Sample Size: {ess[j]}")
 
     def reset(self):
         """
@@ -321,3 +330,74 @@ class MultivariateMCMC:
             return self.target_pdf(y) * np.abs(np.linalg.det(jacobian(y)))
 
         self.target_pdf = new_target_pdf
+       
+        def gelman_rubin(self, samples):
+            """
+            Compute the Gelman-Rubin diagnostic (Potential Scale Reduction Factor) for each parameter.
+            """
+            # Calculate the mean of each chain for each parameter, shape = (num_chains, num_params)
+            means_per_chain = np.mean(samples, axis=1)
+
+            # Calculate the mean of each parameter across all chains, shape = (num_params,)
+            means_overall = np.mean(means_per_chain, axis=0)
+
+            # Calculate the variance of each chain for each parameter, shape = (num_chains, num_params)
+            variances_per_chain = np.var(samples, axis=1)
+
+            # Calculate the variance of each parameter across all chains, shape = (num_params,)
+            variances_overall = np.var(means_per_chain, axis=0)
+
+            # B/n: between-chain variance, shape = (num_params,)
+            B_div_n = variances_overall
+
+            # W: within-chain variance, shape = (num_params,)
+            W = np.mean(variances_per_chain, axis=0)
+
+            # Estimate of the variance of each parameter, shape = (num_params,)
+            var_hat = (1 - 1.0 / self.num_chains) * W + B_div_n
+
+            # Potential Scale Reduction Factor, shape = (num_params,)
+            R_hat = np.sqrt(var_hat / W)
+
+            return R_hat
+
+        def effective_sample_size(self, samples):
+            """
+            Compute the effective sample size for each parameter.
+            """
+            # Calculate the autocorrelation of each chain for each parameter, shape = (num_chains, num_params)
+            autocorrelations = np.empty((self.num_chains, len(self.current_state[0])))
+
+            for i in range(self.num_chains):
+                for j in range(len(self.current_state[0])):
+                    autocorrelations[i, j] = np.correlate(samples[i, :, j] - np.mean(samples[i, :, j]),
+                                                          samples[i, :, j] - np.mean(samples[i, :, j]))[0]
+
+            # Calculate the autocorrelation time for each parameter, shape = (num_params,)
+            autocorrelation_time = 1 + 2 * autocorrelations.sum(axis=0) / self.num_chains
+
+            # Effective sample size for each parameter, shape = (num_params,)
+            ess = self.num_chains * len(samples) / autocorrelation_time
+
+            return ess
+        
+        def traceplot(self, samples):
+            """
+            Plot a trace plot for each parameter in each chain.
+
+            Parameters
+            ----------
+            samples : numpy.ndarray
+                An array of shape (num_chains, num_samples, num_params) containing the MCMC samples for each chain.
+            """
+            num_chains, num_samples, num_params = samples.shape
+
+            for i in range(num_params):
+                plt.figure(figsize=(10, 5))
+                for j in range(num_chains):
+                    plt.plot(samples[j, :, i], label=f'Chain {j}')
+                plt.title(f'Traceplot for parameter {i}')
+                plt.xlabel('Iteration')
+                plt.ylabel('Parameter value')
+                plt.legend()
+                plt.show()
