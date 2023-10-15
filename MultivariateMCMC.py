@@ -16,7 +16,18 @@ class MCMCSampler:
                  chain_method: str = 'parallel', progress_bar: bool = True,
                  jit_model_args: bool = False, target_acceptance_rate: float = 0.8,
                  gamma: float = 0.05, t0: float = 10, kappa: float = 0.75):
-        # ... (as before)
+        self.sampler = sampler
+        self.num_warmup = num_warmup
+        self.num_samples = num_samples
+        self.thinning = thinning
+        self.num_chains = num_chains
+        self.postprocess_fn = postprocess_fn
+        self.chain_method = chain_method
+        self.progress_bar = progress_bar
+        self.jit_model_args = jit_model_args
+        self.collected_samples = []
+        self.extra_fields = {}
+        self.warmup_samples = []
         self.target_acceptance_rate = target_acceptance_rate
         self.log_step_size = jnp.log(1.0)  # log(initial step size)
         self.log_step_size_avg = 0.0  # log average of step size
