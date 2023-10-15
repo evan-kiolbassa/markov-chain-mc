@@ -1,12 +1,13 @@
 import numpy as np
 import multiprocessing as mp
-
+from typing import List, Callable, Optional, Union, Tuple
 
 class MultivariateMCMC:
     def __init__(
             self, target_pdf,
             initial_state,
             num_chains=1,
+            initial_state_bounds: Tuple[Union[float, List[float]], Union[float, List[float]]],
             covariance_method=None,
             proposal_covariance=None,
             burn_in_steps=1000,
@@ -56,6 +57,27 @@ class MultivariateMCMC:
             self.total_steps = np.zeros(num_chains)
             self.accepted_steps = np.zeros(num_chains)
             self.choose_covariance_matrix()
+                
+    def random_init_state(self, bounds: Tuple[Union[float, List[float]], Union[float, List[float]]]) -> np.ndarray:
+        """
+        Generate lower and upper bounds for initializing the current_state for each chain.
+        
+        Parameters
+        ----------
+        bounds : tuple
+            A tuple containing the lower and upper bounds. Each element of the tuple can be a single number or a list of numbers.
+            
+        Returns
+        -------
+        np.ndarray
+            A numpy array representing the initial state within the given bounds.
+        """
+        lower, upper = bounds
+        if isinstance(lower, (int, float)) and isinstance(upper, (int, float)):
+            lower = [lower] * self.dim
+            upper = [upper] * self.dim
+        return np.random.uniform(lower, upper, self.dim)
+        
     def parallel_chain_run(self, burn_in=False, num_samples=0, thinning_factor=1):
         """
         Helper function to run burn-in or sampling on a single chain in parallel.
