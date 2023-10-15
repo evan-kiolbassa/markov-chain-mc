@@ -160,19 +160,21 @@ class MultivariateMCMC:
             self.accepted_steps[chain_index] += 1.0
             self.batch[chain_index].append(proposal)
 
-            if method == "adaptive" and len(self.batch[chain_index]) % self.update_frequency == 0:
-                self.update_covariance(chain_index)
-                self.batch[chain_index] = []  # clear the batch after updating
-
-        return self.current_state[chain_index]
-    def update_covariance(self, chain_index):
+            if method == "adaptive":
+                self.batch[chain_index].append(proposal)
+                if len(self.batch[chain_index]) % self.update_frequency == 0:
+                    self.update_covariance(chain_index)
+            # No need to clear the batch after updating
+            return self.current_state[chain_index]
+    def update_covariance(self, chain_index: int):
         """
         Update the proposal covariance matrix based on the batch of accepted proposals.
         """
         accepted_proposals = np.array(self.batch[chain_index])
-        mean_proposal = np.mean(accepted_proposals, axis=0)
-        diff = accepted_proposals - mean_proposal
-        self.proposal_covariance[chain_index] += self.learning_rate * (np.outer(diff, diff) - self.proposal_covariance[chain_index])
+        # Using np.cov to calculate the covariance matrix
+        cov_matrix = np.cov(accepted_proposals, rowvar=False)
+        # adaptive update
+        self.proposal_covariance[chain_index] = (1 - self.learning_rate) * self.proposal_covariance[chain_index] + self.learning_rate * cov_matrix
     def burn_in(self):
         """
         Perform the burn-in period for all chains.
