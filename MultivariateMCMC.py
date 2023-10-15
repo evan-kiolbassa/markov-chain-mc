@@ -44,18 +44,18 @@ class MultivariateMCMC:
                 If the covariance_method for any chain is not "empirical", "adaptive", or "manual".
                 If the covariance_method for any chain is "manual" but proposal_covariance is not provided for that chain.
             """
-            self.update_frequency = update_frequency
-            self.batch = [[] for _ in range(num_chains)]
+            self.dim = len(initial_state)
             self.target_pdf = target_pdf
-            self.current_state = np.array([initial_state]*num_chains)
-            self.initial_state = initial_state
-            self.learning_rate = learning_rate
+            self.current_state = np.array([initial_state] * num_chains)
             self.num_chains = num_chains
-            self.covariance_method = covariance_method or ["empirical"]*num_chains
-            self.proposal_covariance = proposal_covariance or [np.eye(len(initial_state))]*num_chains
             self.burn_in_steps = burn_in_steps
+            self.learning_rate = learning_rate
+            self.update_frequency = update_frequency
             self.total_steps = np.zeros(num_chains)
             self.accepted_steps = np.zeros(num_chains)
+            
+            self.covariance_method = covariance_method or ["empirical"] * num_chains
+            self.proposal_covariance = proposal_covariance or [np.eye(self.dim)] * num_chains
             self.choose_covariance_matrix()
                 
     def random_init_state(self, bounds: Tuple[Union[float, List[float]], Union[float, List[float]]]) -> np.ndarray:
