@@ -4,9 +4,34 @@ import jax.numpy as jnp
 
 class MCMCKernel:
     def init(self, rng_key, *args, **kwargs):
+        """
+        Initialize the sampler.
+        
+        Parameters:
+        - rng_key: A random number generator key used for initial sampling.
+        - args, kwargs: Additional arguments for initialization.
+        
+        Returns:
+        - state: The initial state for MCMC sampling.
+        
+        Note: Must be implemented by the subclass.
+        """
         raise NotImplementedError("The init method must be implemented by the subclass.")
     
     def step(self, state, rng_key):
+        """
+        Perform one MCMC step starting from the given state.
+        
+        Parameters:
+        - state: The current state of the MCMC chain.
+        - rng_key: A random number generator key used for randomness in the step.
+        
+        Returns:
+        - new_state: The state after one MCMC step.
+        - is_accepted: A boolean indicating whether the step was accepted.
+        
+        Note: Must be implemented by the subclass.
+        """
         raise NotImplementedError("The step method must be implemented by the subclass.")
 
 class MCMCSampler:
@@ -16,6 +41,22 @@ class MCMCSampler:
                  chain_method: str = 'parallel', progress_bar: bool = True,
                  jit_model_args: bool = False, target_acceptance_rate: float = 0.8,
                  gamma: float = 0.05, t0: float = 10, kappa: float = 0.75):
+        """
+        Initialize the MCMC Sampler.
+        
+        Parameters:
+        - sampler: The MCMC kernel used for sampling.
+        - num_warmup: Number of warm-up steps.
+        - num_samples: Number of samples to collect.
+        - thinning: Thinning factor for the chain.
+        - num_chains: Number of MCMC chains.
+        - postprocess_fn: Function to postprocess samples.
+        - chain_method: Method for running chains ('parallel' or 'sequential').
+        - progress_bar: Whether to show a progress bar.
+        - jit_model_args: Whether to JIT compile model arguments.
+        - target_acceptance_rate: Target acceptance rate for dual-averaging.
+        - gamma, t0, kappa: Hyperparameters for the dual-averaging algorithm.
+        """
         self.sampler = sampler
         self.num_warmup = num_warmup
         self.num_samples = num_samples
@@ -37,6 +78,21 @@ class MCMCSampler:
         self.accepted_count = 0
 
     def warmup(self, rng_key, *args, extra_fields=(), collect_warmup=False, init_params=None, **kwargs):
+        """
+        Perform the warm-up phase of MCMC sampling.
+        
+        Parameters:
+        - rng_key: A random number generator key for the warm-up phase.
+        - args, kwargs: Additional arguments passed to the sampler.
+        - extra_fields: Additional state fields to collect.
+        - collect_warmup: Whether to collect warm-up samples.
+        - init_params: Initial parameters for the MCMC chain.
+        
+        Side-effects:
+        - Updates `self.warmup_state` to the final state after warm-up.
+        - If `collect_warmup` is True, populates `self.warmup_samples`.
+        - Updates `self.step_size` based on dual-averaging.
+        """
         state = self.sampler.init(rng_key, *args, **kwargs)
         self.warmup_state = state
         if collect_warmup:
