@@ -32,11 +32,11 @@ class MultivariateMCMC:
             The number of burn-in steps to perform before generating samples.
         """
         self.target_pdf = target_pdf
-        self.current_state = initial_state
+        self.current_state = np.array(initial_state)
         self.covariance_method = covariance_method
         self.proposal_covariance = proposal_covariance
         self.burn_in_steps = burn_in_steps
-        self.acceptance_rate = 0.0
+        self.accepted_proposals = 0
 
     def step(self):
         """
@@ -47,17 +47,11 @@ class MultivariateMCMC:
         array-like
             The next state of the Markov chain.
         """
-        # Generate a proposal for the next state of the Markov chain
         proposal = np.random.multivariate_normal(self.current_state, self.proposal_covariance)
-
-        # Calculate the log acceptance probability for the proposal
         log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state)
-
-        # Accept or reject the proposal based on the acceptance probability
         if np.log(np.random.uniform()) < log_accept_prob:
             self.current_state = proposal
-            self.acceptance_rate += 1.0
-
+            self.accepted_proposals += 1
         return self.current_state
 
     def burn_in(self):
@@ -65,7 +59,7 @@ class MultivariateMCMC:
         Perform the burn-in period by running the MCMC sampler for a specified number
         of steps without collecting any samples.
         """
-        for i in range(self.burn_in_steps):
+        for _ in range(self.burn_in_steps):
             self.step()
 
     def sample(self, num_samples):
@@ -82,90 +76,22 @@ class MultivariateMCMC:
         numpy.ndarray
             A numpy array containing the generated samples.
         """
-        self.choose_covariance_matrix()
         self.burn_in()
         samples = np.empty((num_samples, len(self.current_state)))
         for i in range(num_samples):
             samples[i] = self.step()
-        self.acceptance_rate /= (self.burn_in_steps + num_samples)
+        total_proposals = self.burn_in_steps + num_samples
+        self.acceptance_rate = self.accepted_proposals / total_proposals
         return samples
 
     def choose_covariance_matrix(self):
         """
         Choose the proposal covariance matrix based on the specified covariance_method.
         """
-        if self.covariance_method == "empirical":
-            self.proposal_covariance = self.compute_empirical_covariance(1000)
-        elif self.covariance_method == "adaptive":
-            if self.proposal_covariance is None:
-                self.proposal_covariance = np.eye(len(self.current_state))
-            for i in range(1000):
-                proposal = np.random.multivariate_normal(self.current_state, self.proposal_covariance)
-                log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state)
-                acceptance_prob = np.exp(log_accept_prob)
-                if np.random.uniform() < acceptance_prob:
-                    self.current_state = proposal
-                    self.proposal_covariance += np.outer(
-                        proposal - self.current_state, proposal - self.current_state
-                        )
-                else:
-                    self.proposal_covariance -= np.outer(
-                        proposal - self.current_state, proposal - self.current_state
-                        )
-        elif self.covariance_method == "manual":
-            if self.proposal_covariance is None:
-                raise ValueError(
-                    "The proposal_covariance parameter must be provided when using the manual covariance method."
-                    )
-        else:
-            raise ValueError("Invalid covariance_method. Valid options are 'empirical', 'adaptive', or 'manual'.")
-        
-    def generate_samples(self, num_samples, use_current_covariance=True):
-        """
-        Generate a specified number of samples without choosing the covariance matrix.
-        
-        Parameters
-        ----------
-        num_samples : int
-            The number of samples to generate.
-        use_current_covariance : bool, optional, default: True
-            Whether to use the current proposal covariance or an identity matrix.
-            
-        Returns
-        -------
-        numpy.ndarray
-            A numpy array containing the generated samples.
-        """
-        if not use_current_covariance:
-            original_covariance = self.proposal_covariance
-            self.proposal_covariance = np.eye(len(self.current_state))
-
-        samples = np.empty((num_samples, len(self.current_state)))
-        for i in range(num_samples):
-            samples[i] = self.step()
-
-        if not use_current_covariance:
-            self.proposal_covariance = original_covariance
-
-        return samples
+        pass
         
     def compute_empirical_covariance(self, num_samples):
-        """
-        Compute the empirical covariance matrix based on the specified number of samples.
-
-        Parameters
-        ----------
-        num_samples : int
-            The number of samples used to compute the empirical covariance matrix.
-
-        Returns
-        -------
-        numpy.ndarray
-            A numpy array representing the computed empirical covariance matrix.
-        """
-        temp_samples = self.generate_samples(num_samples, use_current_covariance=False)
-        empirical_covariance = np.cov(temp_samples.T) + np.eye(len(self.current_state)) * 1e-6
-        return empirical_covariance
+       pass
         
     def gradient_ascent(self, target_pdf_grad, learning_rate=0.01, max_iter=1000, tol=1e-6):
         """
