@@ -8,6 +8,7 @@ class MultivariateMCMC:
             self, target_pdf, 
             initial_state, 
             covariance_method="empirical", 
+            proposal_distribution=None,
             proposal_covariance=None,
             burn_in_steps=1000
             ):
@@ -24,6 +25,9 @@ class MultivariateMCMC:
         covariance_method : str, optional, default: "empirical"
             The method to use for choosing the proposal covariance matrix.
             Valid options are "empirical", "adaptive", or "manual".
+        proposal_distribution : callable, optional
+            A function that generates proposals given a current state and a covariance matrix.
+            If None, defaults to a multivariate normal distribution.
         proposal_covariance : array-like, optional
             A positive definite covariance matrix used to generate
             proposals for the next state of the Markov chain. This
@@ -34,9 +38,13 @@ class MultivariateMCMC:
         self.target_pdf = target_pdf
         self.current_state = np.array(initial_state)
         self.covariance_method = covariance_method
+        self.proposal_distribution = proposal_distribution or self.default_proposal_distribution
         self.proposal_covariance = proposal_covariance
         self.burn_in_steps = burn_in_steps
         self.accepted_proposals = 0
+
+    def default_proposal_distribution(self, current_state, covariance):
+        return np.random.multivariate_normal(current_state, covariance)
 
     def step(self):
         """
@@ -47,7 +55,7 @@ class MultivariateMCMC:
         array-like
             The next state of the Markov chain.
         """
-        proposal = np.random.multivariate_normal(self.current_state, self.proposal_covariance)
+        proposal = self.proposal_distribution(self.current_state, self.proposal_covariance)
         log_accept_prob = self.target_pdf(proposal) - self.target_pdf(self.current_state)
         if np.log(np.random.uniform()) < log_accept_prob:
             self.current_state = proposal
