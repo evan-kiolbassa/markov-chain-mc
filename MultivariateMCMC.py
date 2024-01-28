@@ -91,7 +91,29 @@ class MultivariateMCMC:
         pass
         
     def compute_empirical_covariance(self, num_samples):
-       pass
+        """
+        Compute the empirical covariance matrix based on the specified number of samples.
+
+        Parameters
+        ----------
+        num_samples : int
+            The number of samples used to compute the empirical covariance matrix.
+
+        Returns
+        -------
+        numpy.ndarray
+            A numpy array representing the computed empirical covariance matrix.
+        """
+        # Generate samples for covariance computation
+        self.burn_in()
+        samples = np.empty((num_samples, len(self.current_state)))
+        for i in range(num_samples):
+            samples[i] = self.step()
+
+        # Compute the empirical covariance matrix
+        empirical_covariance = np.cov(samples.T)
+
+        return empirical_covariance
         
     def gradient_ascent(self, target_pdf_grad, learning_rate=0.01, max_iter=1000, tol=1e-6):
         """
